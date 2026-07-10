@@ -124,25 +124,27 @@ onMounted(refreshAll)
         </label>
       </div>
 
-      <div class="filter-tabs">
-        <button
-          v-for="tab in learningTabs"
-          :key="tab.value"
-          type="button"
-          :class="{ active: filters.learningStatus === tab.value }"
-          @click="changeLearningStatus(tab.value)"
-        >
-          {{ tab.label }} <strong>{{ stats[tab.countKey] }}</strong>
-        </button>
-      </div>
-
-      <div class="filter-tabs soft">
+      <div class="filter-line">
+        <span class="filter-label">性质：</span>
         <button
           v-for="tab in courseTypeTabs"
           :key="tab.value"
           type="button"
           :class="{ active: filters.courseType === tab.value }"
           @click="changeCourseType(tab.value)"
+        >
+          {{ tab.label }} <strong>{{ stats[tab.countKey] }}</strong>
+        </button>
+      </div>
+
+      <div class="filter-line">
+        <span class="filter-label">进度：</span>
+        <button
+          v-for="tab in learningTabs"
+          :key="tab.value"
+          type="button"
+          :class="{ active: filters.learningStatus === tab.value }"
+          @click="changeLearningStatus(tab.value)"
         >
           {{ tab.label }} <strong>{{ stats[tab.countKey] }}</strong>
         </button>

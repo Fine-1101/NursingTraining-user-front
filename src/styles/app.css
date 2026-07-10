@@ -1174,37 +1174,43 @@ a {
   fill: currentColor;
 }
 
-.filter-tabs {
+.filter-line {
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 10px 18px;
+  min-height: 38px;
 }
 
-.filter-tabs button {
-  height: 38px;
+.filter-label {
+  flex: 0 0 auto;
+  color: #283343;
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.filter-line button {
+  min-width: 58px;
+  height: 34px;
   padding: 0 14px;
-  border: 1px solid #dfe6ec;
+  border: 0;
   border-radius: 999px;
-  background: #fff;
-  color: #5f6b7a;
+  background: transparent;
+  color: #3d4858;
   cursor: pointer;
+  font-size: 15px;
   font-weight: 800;
 }
 
-.filter-tabs button.active {
-  border-color: rgba(31, 154, 49, 0.22);
-  background: #eef9ef;
-  color: #168c28;
+.filter-line button.active {
+  background: #69d1ad;
+  color: #fff;
+  box-shadow: 0 6px 14px rgba(34, 172, 126, 0.18);
 }
 
-.filter-tabs strong {
+.filter-line strong {
   margin-left: 5px;
   color: inherit;
-}
-
-.filter-tabs.soft button {
-  height: 34px;
-  font-size: 13px;
 }
 
 .course-list-card {
