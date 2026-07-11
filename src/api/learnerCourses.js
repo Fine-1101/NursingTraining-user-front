@@ -16,3 +16,7 @@ export function getLearnerCourses(params = {}) {
 export function getLearnerCourseStats() {
   return request('/api/learner/courses/stats')
 }
+
+export function getLearnerCourseDetail(courseId) {
+  return request(`/api/learner/courses/${courseId}`)
+}
