@@ -5,6 +5,7 @@ import HomePage from './components/home/HomePage.vue'
 import MyCoursesPage from './components/courses/MyCoursesPage.vue'
 import CourseDetailPage from './components/courses/CourseDetailPage.vue'
 import CourseLearningPage from './components/courses/CourseLearningPage.vue'
+import LearningRecordsPage from './components/records/LearningRecordsPage.vue'
 import DashboardLayout from './layouts/DashboardLayout.vue'
 import { getStoredUser } from './api/request'
 import { logout, register } from './api/auth'
@@ -144,6 +145,7 @@ async function handleLogout() {
           :point-id="selectedPointId"
           @back="backToCourseDetail"
         />
+        <LearningRecordsPage v-else-if="activeModule === 'records'" />
         <div v-else class="module-placeholder">
           <h1>{{ activeModule === 'records' ? '学习记录' : '个人中心' }}</h1>
           <p>模块待开发</p>

@@ -20,3 +20,17 @@ export function getLearnerCourseStats() {
 export function getLearnerCourseDetail(courseId) {
   return request(`/api/learner/courses/${courseId}`)
 }
+
+export function getLearnerCourseStudy(courseId, pointId, activeType) {
+  const query = new URLSearchParams()
+  if (activeType) query.set('activeType', activeType)
+  const suffix = query.toString() ? `?${query.toString()}` : ''
+  return request(`/api/learner/courses/${courseId}/points/${pointId}/study${suffix}`)
+}
+
+export function saveLearnerVideoProgress(courseId, pointId, videoId, payload) {
+  return request(`/api/learner/courses/${courseId}/points/${pointId}/videos/${videoId}/progress`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
