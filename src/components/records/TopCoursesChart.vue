@@ -45,10 +45,10 @@ const option = computed(() => {
     },
     series: [
       {
-        name: '学习时长',
+        name: '学习次数',
         type: 'bar',
         barWidth: 12,
-        data: courses.map((course) => Number(course.totalDurationHours || 0)),
+        data: courses.map((course) => Number(course.recordCount || 0)),
         itemStyle: {
           color: '#159947',
           borderRadius: [0, 8, 8, 0],

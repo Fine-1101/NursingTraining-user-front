@@ -25,7 +25,7 @@ const listData = reactive({
   records: [],
   total: 0,
   page: 1,
-  size: 10,
+  size: 50,
   pages: 0,
 })
 const topCoursePage = ref([])
@@ -123,7 +123,7 @@ onMounted(loadRecords)
         </section>
 
         <div class="records-chart-grid">
-          <section class="records-card">
+          <section class="records-card resource-chart-card">
             <div class="records-section-title">
               <h2>学习课件分布</h2>
               <span>{{ periodText }}</span>

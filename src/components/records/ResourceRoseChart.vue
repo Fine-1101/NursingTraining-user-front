@@ -24,8 +24,8 @@ const option = computed(() => ({
     {
       name: '课件分布',
       type: 'pie',
-      radius: [18, 78],
-      center: ['36%', '50%'],
+      radius: [24, 118],
+      center: ['38%', '52%'],
       roseType: 'radius',
       itemStyle: {
         borderRadius: 4,
