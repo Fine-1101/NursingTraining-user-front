@@ -64,6 +64,13 @@ function questionTypeText(type) {
   return Number(type) === 2 ? '判断题' : '单选题'
 }
 
+function optionKeyText(optionKey) {
+  const normalized = String(optionKey ?? '').trim().toUpperCase()
+  if (normalized === 'TRUE') return '对'
+  if (normalized === 'FALSE') return '错'
+  return optionKey
+}
+
 function stopTimer() {
   if (timer) {
     window.clearInterval(timer)
@@ -236,7 +243,7 @@ onBeforeUnmount(() => {
               :disabled="savingMap[currentQuestion.attemptQuestionId]"
               @click="selectAnswer(currentQuestion, option.optionKey)"
             >
-              <span>{{ option.optionKey === 'TRUE' ? '对' : option.optionKey === 'FALSE' ? '错' : option.optionKey }}</span>
+              <span>{{ optionKeyText(option.optionKey) }}</span>
               <p>{{ option.content }}</p>
             </button>
           </div>

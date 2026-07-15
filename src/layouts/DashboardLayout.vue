@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import BrandLogo from '../components/BrandLogo.vue'
 import MessagePopover from '../components/messages/MessagePopover.vue'
 
@@ -14,7 +14,12 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['change-module', 'logout'])
+const emit = defineEmits(['change-module', 'search-courses', 'logout'])
+const topSearchKeyword = ref('')
+
+function submitTopSearch() {
+  emit('search-courses', topSearchKeyword.value)
+}
 
 const moduleTitles = {
   home: {
@@ -28,6 +33,10 @@ const moduleTitles = {
   records: {
     title: '学习记录',
     subtitle: '查看近期学习轨迹和课程完成情况',
+  },
+  assessmentHistory: {
+    title: '考核记录',
+    subtitle: '查看往次考核成绩、通过情况和考试详情',
   },
   profile: {
     title: '个人中心',
@@ -76,6 +85,10 @@ const showBreadcrumb = computed(() => ['courseDetail', 'courseLearning', 'assess
           <svg viewBox="0 0 24 24"><path d="M7 2h2v3h6V2h2v3h3v16H4V5h3V2Zm11 8H6v9h12v-9Zm-9 2h3v3H9v-3Zm5 0h3v3h-3v-3Z" /></svg>
           <span>学习记录</span>
         </button>
+        <button :class="{ active: activeModule === 'assessmentHistory' }" type="button" @click="emit('change-module', 'assessmentHistory')">
+          <svg viewBox="0 0 24 24"><path d="M5 3h14v18H5V3Zm2 2v14h10V5H7Zm2 3h6v2H9V8Zm0 4h6v2H9v-2Zm0 4h4v2H9v-2Z" /></svg>
+          <span>考核记录</span>
+        </button>
         <button :class="{ active: activeModule === 'profile' }" type="button" @click="emit('change-module', 'profile')">
           <svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-4 0-7 2-7 4.5V21h14v-2.5C19 16 16 14 12 14Z" /></svg>
           <span>个人中心</span>
@@ -113,10 +126,12 @@ const showBreadcrumb = computed(() => ['courseDetail', 'courseLearning', 'assess
         </div>
 
         <div class="top-actions">
-          <label class="search-box">
-            <input placeholder="搜索课程、资源、专题" />
-            <svg viewBox="0 0 24 24"><path d="m20 18.6-4.7-4.7A7 7 0 1 0 13.9 15.3l4.7 4.7 1.4-1.4ZM5 10a5 5 0 1 1 10 0 5 5 0 0 1-10 0Z" /></svg>
-          </label>
+          <form class="search-box" role="search" @submit.prevent="submitTopSearch">
+            <input v-model="topSearchKeyword" aria-label="搜索课程" placeholder="搜索课程名称或讲师姓名" />
+            <button type="submit" aria-label="搜索">
+              <svg viewBox="0 0 24 24"><path d="m20 18.6-4.7-4.7A7 7 0 1 0 13.9 15.3l4.7 4.7 1.4-1.4ZM5 10a5 5 0 1 1 10 0 5 5 0 0 1-10 0Z" /></svg>
+            </button>
+          </form>
           <MessagePopover />
           <div class="user-box">
             <span class="avatar">{{ (user.nickname || user.username || '学').slice(0, 1) }}</span>

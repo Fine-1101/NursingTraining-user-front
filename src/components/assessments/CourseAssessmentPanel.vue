@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { getCourseAssessment } from '../../api/learnerAssessments'
+import { getCourseAssessments } from '../../api/learnerAssessments'
 
 const props = defineProps({
   courseId: {
@@ -13,14 +13,11 @@ const emit = defineEmits(['start-exam', 'view-result'])
 
 const loading = ref(false)
 const errorMessage = ref('')
-const assessment = ref(null)
-const secondsToStart = ref(0)
+const assessments = ref([])
+const clock = ref(Date.now())
 let timer = null
 
-const hasAssessment = computed(() => Boolean(assessment.value?.assessmentId))
-const isNotOpen = computed(() => assessment.value?.state === 'NOT_OPEN')
-const canEnterExam = computed(() => assessment.value?.actionEnabled && ['START', 'CONTINUE', 'RETRY'].includes(assessment.value?.action))
-const canViewResult = computed(() => assessment.value?.latestAttemptId && ['VIEW_RESULT', 'RETRY'].includes(assessment.value?.action))
+const hasAssessment = computed(() => assessments.value.length > 0)
 
 const stateTextMap = {
   NOT_OPEN: '考试未开始',
@@ -74,25 +71,25 @@ function stopTimer() {
   }
 }
 
-function syncCountdown() {
+function startTimer() {
   stopTimer()
-  if (!assessment.value?.startAt || !assessment.value?.serverTime || assessment.value?.state !== 'NOT_OPEN') {
-    secondsToStart.value = 0
-    return
-  }
+  clock.value = Date.now()
+  timer = window.setInterval(() => { clock.value = Date.now() }, 1000)
+}
 
-  const startAt = parseTime(assessment.value.startAt)
-  const serverTime = parseTime(assessment.value.serverTime)
-  if (!startAt || !serverTime) return
+function secondsUntilStart(item) {
+  if (item?.state !== 'NOT_OPEN') return 0
+  const startAt = parseTime(item.startAt)
+  if (!startAt) return 0
+  return Math.max(0, Math.floor((startAt.getTime() - clock.value) / 1000))
+}
 
-  secondsToStart.value = Math.max(0, Math.floor((startAt.getTime() - serverTime.getTime()) / 1000))
-  timer = window.setInterval(() => {
-    secondsToStart.value = Math.max(0, secondsToStart.value - 1)
-    if (secondsToStart.value <= 0) {
-      stopTimer()
-      loadAssessment()
-    }
-  }, 1000)
+function canEnterExam(item) {
+  return item?.actionEnabled && ['START', 'CONTINUE', 'RETRY'].includes(item?.action)
+}
+
+function canViewResult(item) {
+  return item?.latestAttemptId && ['VIEW_RESULT', 'RETRY'].includes(item?.action)
 }
 
 async function loadAssessment() {
@@ -100,31 +97,32 @@ async function loadAssessment() {
   errorMessage.value = ''
 
   try {
-    assessment.value = await getCourseAssessment(props.courseId)
-    syncCountdown()
+    const data = await getCourseAssessments(props.courseId)
+    assessments.value = Array.isArray(data) ? data : []
+    startTimer()
   } catch (error) {
     errorMessage.value = error.message || '考核信息加载失败'
-    assessment.value = null
+    assessments.value = []
   } finally {
     loading.value = false
   }
 }
 
-function handlePrimaryAction() {
-  if (!assessment.value?.assessmentId || !canEnterExam.value) return
+function handlePrimaryAction(assessment) {
+  if (!assessment?.assessmentId || !canEnterExam(assessment)) return
   emit('start-exam', {
     courseId: props.courseId,
-    assessmentId: assessment.value.assessmentId,
-    attemptId: assessment.value.currentAttemptId,
+    assessmentId: assessment.assessmentId,
+    attemptId: assessment.currentAttemptId,
   })
 }
 
-function handleViewResult() {
-  if (!assessment.value?.latestAttemptId) return
+function handleViewResult(assessment) {
+  if (!assessment?.latestAttemptId) return
   emit('view-result', {
     courseId: props.courseId,
-    assessmentId: assessment.value.assessmentId,
-    attemptId: assessment.value.latestAttemptId,
+    assessmentId: assessment.assessmentId,
+    attemptId: assessment.latestAttemptId,
   })
 }
 
@@ -151,7 +149,8 @@ watch(() => props.courseId, loadAssessment)
       <span>请先完成课程学习，等待教师发布课程考核。</span>
     </div>
 
-    <article v-else class="assessment-card">
+    <div v-else class="assessment-card-list">
+    <article v-for="assessment in assessments" :key="assessment.assessmentId" class="assessment-card">
       <div class="assessment-title-row">
         <div>
           <span class="assessment-state">{{ stateTextMap[assessment.state] || assessment.state }}</span>
@@ -165,28 +164,33 @@ watch(() => props.courseId, loadAssessment)
 
       <div class="assessment-meta-grid">
         <span>开始时间：{{ formatDateTime(assessment.startAt) }}</span>
-        <span>结束时间：{{ formatDateTime(assessment.endAt) }}</span>
+        <span>最晚提交时间：{{ formatDateTime(assessment.endAt) }}</span>
         <span>考试时长：{{ assessment.durationMinutes || 0 }} 分钟</span>
         <span>及格分：{{ assessment.passScore || 0 }} 分</span>
         <span>考试次数：{{ assessment.usedAttempts || 0 }} / {{ assessment.maxAttempts || 0 }}</span>
         <span>剩余次数：{{ assessment.remainingAttempts ?? 0 }}</span>
       </div>
 
-      <div v-if="isNotOpen" class="assessment-countdown">
+      <div v-if="assessment.state === 'NOT_OPEN'" class="assessment-countdown">
         <span>距离考试开始</span>
-        <strong>{{ formatCountdown(secondsToStart) }}</strong>
+        <strong>{{ formatCountdown(secondsUntilStart(assessment)) }}</strong>
       </div>
 
       <p v-if="assessment.disabledReason" class="assessment-reason">{{ assessment.disabledReason }}</p>
 
       <div class="assessment-actions">
-        <button type="button" class="assessment-primary" :disabled="!canEnterExam" @click="handlePrimaryAction">
-          {{ isNotOpen ? '考试未开始' : actionTextMap[assessment.action] || '进入考试' }}
+        <button type="button" class="assessment-primary" :disabled="!canEnterExam(assessment)" @click="handlePrimaryAction(assessment)">
+          {{ assessment.state === 'NOT_OPEN' ? '考试未开始' : actionTextMap[assessment.action] || '进入考试' }}
         </button>
-        <button v-if="canViewResult" type="button" class="assessment-secondary" @click="handleViewResult">
+        <button v-if="canViewResult(assessment)" type="button" class="assessment-secondary" @click="handleViewResult(assessment)">
           查看成绩
         </button>
       </div>
     </article>
+    </div>
   </section>
 </template>
+
+<style scoped>
+.assessment-card-list{display:grid;gap:16px}
+</style>

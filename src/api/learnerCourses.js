@@ -2,9 +2,17 @@ import { request } from './request'
 
 export function getLearnerCourses(params = {}) {
   const query = new URLSearchParams()
+  const normalizedParams = {
+    learningStatus: 'ALL',
+    courseType: 'ALL',
+    keyword: '',
+    page: 1,
+    size: 10,
+    ...params,
+  }
 
-  Object.entries(params).forEach(([key, value]) => {
-    if (value !== undefined && value !== null && value !== '') {
+  Object.entries(normalizedParams).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && (key === 'keyword' || value !== '')) {
       query.set(key, value)
     }
   })

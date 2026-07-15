@@ -7,6 +7,7 @@ import CourseDetailPage from './components/courses/CourseDetailPage.vue'
 import CourseLearningPage from './components/courses/CourseLearningPage.vue'
 import AssessmentExamPage from './components/assessments/AssessmentExamPage.vue'
 import AssessmentResultPage from './components/assessments/AssessmentResultPage.vue'
+import AssessmentHistoryPage from './components/assessments/AssessmentHistoryPage.vue'
 import LearningRecordsPage from './components/records/LearningRecordsPage.vue'
 import ProfilePage from './components/profile/ProfilePage.vue'
 import DashboardLayout from './layouts/DashboardLayout.vue'
@@ -22,12 +23,21 @@ const selectedPointId = ref(null)
 const selectedAssessmentId = ref(null)
 const selectedAttemptId = ref(null)
 const assessmentResultPayload = ref(null)
+const assessmentResultReturnModule = ref('courseDetail')
 const authView = ref('login')
 const selectedRole = ref('')
 const registerDraft = ref({})
 const registerLoading = ref(false)
 const registerError = ref('')
 const currentUser = ref(getStoredUser())
+const courseSearchKeyword = ref('')
+const courseSearchKey = ref(0)
+
+function searchCoursesFromTop(keyword) {
+  courseSearchKeyword.value = String(keyword || '').trim()
+  courseSearchKey.value += 1
+  activeModule.value = 'courses'
+}
 
 function resetToLogin() {
   clearAuthSession()
@@ -143,6 +153,7 @@ function openAssessmentExam(payload) {
 }
 
 function openAssessmentResult(payload) {
+  assessmentResultReturnModule.value = 'courseDetail'
   selectedCourseId.value = payload?.courseId ?? selectedCourseId.value
   selectedAssessmentId.value = payload?.assessmentId ?? selectedAssessmentId.value
   selectedAttemptId.value = payload?.attemptId ?? selectedAttemptId.value
@@ -150,6 +161,10 @@ function openAssessmentResult(payload) {
   if (selectedAttemptId.value) {
     activeModule.value = 'assessmentResult'
   }
+}
+
+function backFromAssessmentResult() {
+  activeModule.value = assessmentResultReturnModule.value
 }
 
 function handleAssessmentSubmitted(payload) {
@@ -202,6 +217,7 @@ onBeforeUnmount(() => {
         :user="currentUser"
         :active-module="activeModule"
         @change-module="activeModule = $event"
+        @search-courses="searchCoursesFromTop"
         @logout="handleLogout"
       >
         <HomePage
@@ -211,6 +227,8 @@ onBeforeUnmount(() => {
         />
         <MyCoursesPage
           v-else-if="activeModule === 'courses'"
+          :key="courseSearchKey"
+          :search-keyword="courseSearchKeyword"
           @open-detail="openCourseDetail"
           @start-learning="openCourseLearning"
         />
@@ -232,7 +250,10 @@ onBeforeUnmount(() => {
           v-else-if="activeModule === 'assessmentResult' && selectedAttemptId"
           :attempt-id="selectedAttemptId"
           :result-payload="assessmentResultPayload"
-          @back="backToCourseDetail"
+          @back="backFromAssessmentResult"
+        />
+        <AssessmentHistoryPage
+          v-else-if="activeModule === 'assessmentHistory'"
         />
         <LearningRecordsPage v-else-if="activeModule === 'records'" />
         <ProfilePage

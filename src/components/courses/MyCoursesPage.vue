@@ -3,6 +3,13 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { getLearnerCourses, getLearnerCourseStats } from '../../api/learnerCourses'
 import { formatDateTimeText } from '../../utils/dateTime'
 
+const props = defineProps({
+  searchKeyword: {
+    type: String,
+    default: '',
+  },
+})
+
 const emit = defineEmits(['open-detail', 'start-learning'])
 
 const learningTabs = [
@@ -21,7 +28,7 @@ const courseTypeTabs = [
 const filters = reactive({
   learningStatus: 'ALL',
   courseType: 'ALL',
-  keyword: '',
+  keyword: props.searchKeyword,
   page: 1,
   size: 10,
 })

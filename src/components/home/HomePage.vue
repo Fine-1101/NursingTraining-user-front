@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { getLearnerHome } from '../../api/learnerHome'
 import CourseCard from './CourseCard.vue'
 import LearningCalendar from './LearningCalendar.vue'
@@ -11,6 +11,7 @@ const emit = defineEmits(['open-detail', 'start-learning'])
 const loading = ref(false)
 const errorMessage = ref('')
 const homeData = ref(null)
+const recommendedCourses = computed(() => (homeData.value?.recommendedCourses || []).slice(0, 4))
 
 function openDetail(course) {
   emit('open-detail', course.courseId)
@@ -46,11 +47,10 @@ onMounted(loadHome)
         <section class="home-section">
           <div class="section-title">
             <h2>推荐课程</h2>
-            <a href="/">查看全部</a>
           </div>
-          <div v-if="homeData?.recommendedCourses?.length" class="course-grid">
+          <div v-if="recommendedCourses.length" class="course-grid">
             <CourseCard
-              v-for="course in homeData.recommendedCourses"
+              v-for="course in recommendedCourses"
               :key="course.courseId"
               :course="course"
               @open-detail="openDetail(course)"
@@ -63,7 +63,6 @@ onMounted(loadHome)
         <section class="home-section">
           <div class="section-title">
             <h2>继续学习</h2>
-            <a href="/">查看全部</a>
           </div>
           <div v-if="homeData?.continueCourses?.length" class="continue-grid">
             <CourseCard
