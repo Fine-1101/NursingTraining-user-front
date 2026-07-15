@@ -1,4 +1,6 @@
 <script setup>
+import { formatDateTimeText } from '../../utils/dateTime'
+
 defineProps({
   records: {
     type: Array,
@@ -15,7 +17,7 @@ function progressText(record) {
 <template>
   <div v-if="records.length" class="learning-timeline">
     <article v-for="record in records" :key="record.recordId" class="timeline-item">
-      <time>{{ record.timeText }}</time>
+      <time>{{ formatDateTimeText(record.timeText, '') }}</time>
       <span class="timeline-dot"></span>
       <div class="timeline-card">
         <div>

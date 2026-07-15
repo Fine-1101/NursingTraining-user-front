@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { getLearnerCourses, getLearnerCourseStats } from '../../api/learnerCourses'
+import { formatDateTimeText } from '../../utils/dateTime'
 
 const emit = defineEmits(['open-detail', 'start-learning'])
 
@@ -198,7 +199,7 @@ onMounted(refreshAll)
               <span>{{ course.instructorName || '未设置讲师' }}</span>
               <span>{{ course.categoryName || '未分类' }}</span>
               <span>{{ course.completedPointCount || 0 }}/{{ course.pointCount || 0 }} 课程点</span>
-              <span v-if="course.lastLearnedAt">最近学习：{{ course.lastLearnedAt }}</span>
+              <span v-if="course.lastLearnedAt">最近学习：{{ formatDateTimeText(course.lastLearnedAt) }}</span>
             </div>
             <div class="my-course-progress">
               <div class="progress-line">

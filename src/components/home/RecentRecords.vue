@@ -1,4 +1,6 @@
 <script setup>
+import { formatDateTimeText } from '../../utils/dateTime'
+
 defineProps({
   records: {
     type: Array,
@@ -18,7 +20,7 @@ defineProps({
         <span></span>
         <div>
           <h3>{{ record.title }}</h3>
-          <p>{{ record.occurredAt }}</p>
+          <p>{{ formatDateTimeText(record.occurredAt) }}</p>
         </div>
       </article>
     </div>

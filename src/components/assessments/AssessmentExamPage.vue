@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import {
   getAssessmentAttempt,
   saveAssessmentAnswer,
@@ -34,6 +34,16 @@ let timer = null
 const questions = computed(() => attempt.value?.questions || [])
 const answeredCount = computed(() => questions.value.filter((question) => question.selectedOptionKey).length)
 const currentQuestion = computed(() => questions.value.find((question) => question.attemptQuestionId === currentQuestionId.value) || questions.value[0])
+const currentQuestionIndex = computed(() => questions.value.findIndex((question) => question.attemptQuestionId === currentQuestion.value?.attemptQuestionId))
+
+function questionOptions(question) {
+  const rawOptions = question?.options || question?.optionList || question?.questionOptions || question?.choices || []
+  return rawOptions.map((option, index) => ({
+    ...option,
+    optionKey: option.optionKey ?? option.key ?? option.value ?? String.fromCharCode(65 + index),
+    content: option.content ?? option.optionContent ?? option.text ?? option.label ?? '',
+  }))
+}
 
 function parseTime(value) {
   if (!value) return null
@@ -109,14 +119,13 @@ async function loadExam() {
   }
 }
 
-function scrollToQuestion(question) {
+function switchQuestion(question) {
   currentQuestionId.value = question.attemptQuestionId
-  nextTick(() => {
-    document.getElementById(`exam-question-${question.attemptQuestionId}`)?.scrollIntoView({
-      behavior: 'smooth',
-      block: 'start',
-    })
-  })
+}
+
+function goToAdjacentQuestion(offset) {
+  const nextQuestion = questions.value[currentQuestionIndex.value + offset]
+  if (nextQuestion) switchQuestion(nextQuestion)
 }
 
 async function selectAnswer(question, optionKey) {
@@ -207,33 +216,40 @@ onBeforeUnmount(() => {
     <section v-else-if="attempt" class="exam-layout">
       <div class="exam-question-area">
         <article
-          v-for="question in questions"
-          :id="`exam-question-${question.attemptQuestionId}`"
-          :key="question.attemptQuestionId"
+          v-if="currentQuestion"
+          :key="currentQuestion.attemptQuestionId"
           class="exam-question-card"
-          :class="{ current: currentQuestion?.attemptQuestionId === question.attemptQuestionId }"
-          @mouseenter="currentQuestionId = question.attemptQuestionId"
         >
           <div class="exam-question-head">
-            <span>第 {{ question.number }} 题</span>
-            <em>{{ questionTypeText(question.questionType) }}</em>
-            <strong>{{ question.score }} 分</strong>
+            <span>第 {{ currentQuestion.number }} 题</span>
+            <em>{{ questionTypeText(currentQuestion.questionType) }}</em>
+            <strong>{{ currentQuestion.score }} 分</strong>
           </div>
-          <h2>{{ question.stem }}</h2>
+          <h2>{{ currentQuestion.stem }}</h2>
 
-          <div class="exam-options">
+          <div v-if="questionOptions(currentQuestion).length" class="exam-options">
             <button
-              v-for="option in question.options"
+              v-for="option in questionOptions(currentQuestion)"
               :key="option.optionKey"
               type="button"
-              :class="{ selected: question.selectedOptionKey === option.optionKey }"
-              :disabled="savingMap[question.attemptQuestionId]"
-              @click="selectAnswer(question, option.optionKey)"
+              :class="{ selected: currentQuestion.selectedOptionKey === option.optionKey }"
+              :disabled="savingMap[currentQuestion.attemptQuestionId]"
+              @click="selectAnswer(currentQuestion, option.optionKey)"
             >
               <span>{{ option.optionKey === 'TRUE' ? '对' : option.optionKey === 'FALSE' ? '错' : option.optionKey }}</span>
               <p>{{ option.content }}</p>
             </button>
           </div>
+          <div v-else class="exam-options-empty">
+            <strong>该题暂未返回选项</strong>
+            <p>请重新加载试卷；若仍未显示，请检查题库是否已为该题配置选项。</p>
+          </div>
+
+          <footer class="exam-question-nav">
+            <button type="button" :disabled="currentQuestionIndex <= 0" @click="goToAdjacentQuestion(-1)">上一题</button>
+            <span>{{ currentQuestionIndex + 1 }} / {{ questions.length }}</span>
+            <button type="button" :disabled="currentQuestionIndex >= questions.length - 1" @click="goToAdjacentQuestion(1)">下一题</button>
+          </footer>
         </article>
       </div>
 
@@ -251,7 +267,7 @@ onBeforeUnmount(() => {
               answered: question.selectedOptionKey,
               current: currentQuestion?.attemptQuestionId === question.attemptQuestionId,
             }"
-            @click="scrollToQuestion(question)"
+            @click="switchQuestion(question)"
           >
             {{ question.number }}
           </button>

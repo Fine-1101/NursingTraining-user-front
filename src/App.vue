@@ -8,6 +8,7 @@ import CourseLearningPage from './components/courses/CourseLearningPage.vue'
 import AssessmentExamPage from './components/assessments/AssessmentExamPage.vue'
 import AssessmentResultPage from './components/assessments/AssessmentResultPage.vue'
 import LearningRecordsPage from './components/records/LearningRecordsPage.vue'
+import ProfilePage from './components/profile/ProfilePage.vue'
 import DashboardLayout from './layouts/DashboardLayout.vue'
 import { clearAuthSession, getStoredUser } from './api/request'
 import { logout, register } from './api/auth'
@@ -234,6 +235,12 @@ onBeforeUnmount(() => {
           @back="backToCourseDetail"
         />
         <LearningRecordsPage v-else-if="activeModule === 'records'" />
+        <ProfilePage
+          v-else-if="activeModule === 'profile'"
+          :user="currentUser"
+          @profile-saved="currentUser = $event"
+          @open-courses="activeModule = 'courses'"
+        />
         <div v-else class="module-placeholder">
           <h1>{{ activeModule === 'records' ? '学习记录' : '个人中心' }}</h1>
           <p>模块待开发</p>

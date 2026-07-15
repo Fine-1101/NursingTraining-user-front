@@ -31,7 +31,7 @@ const moduleTitles = {
   },
   profile: {
     title: '个人中心',
-    subtitle: '管理个人资料和账号信息',
+    subtitle: '完善个人资料，查看 AI 为你生成的个性化学习报告',
   },
   courseDetail: {
     title: '课程详情',
