@@ -72,5 +72,9 @@ export async function request(path, options = {}) {
     throw createRequestError(result, response)
   }
 
-  return result?.data ?? result
+  if (result && Object.prototype.hasOwnProperty.call(result, 'data')) {
+    return result.data
+  }
+
+  return result
 }

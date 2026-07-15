@@ -28,6 +28,61 @@ const initials = computed(() => displayName.value.slice(0, 1))
 const isGenerating = computed(() => ['PENDING', 'GENERATING'].includes(report.value?.status))
 const qualityText = computed(() => ({ INSUFFICIENT: '数据不足', LOW: '初步分析', MEDIUM: '数据良好', HIGH: '数据充分' }[report.value?.dataQuality?.level] || '持续积累中'))
 const performanceText = computed(() => ({ EXCELLENT: '表现优秀', GOOD: '表现良好', STABLE: '状态平稳', NEEDS_IMPROVEMENT: '建议加强', UNKNOWN: '待观察' }[report.value?.performanceLevel] || '待观察'))
+const learningRhythmText = computed(() => {
+  const activeDays = Number(report.value?.overview?.activeDays || 0)
+  const averageMinutes = Number(report.value?.overview?.averageMinutesPerActiveDay || 0)
+  if (activeDays >= 5) return `本周期保持了较高频率的学习，共有 ${activeDays} 个活跃学习日。`
+  if (activeDays >= 3) return `本周期已有 ${activeDays} 个活跃学习日，学习节奏较为稳定。`
+  if (activeDays > 0) return `本周期已开始学习，活跃 ${activeDays} 天${averageMinutes ? `，活跃日平均学习 ${averageMinutes} 分钟` : ''}。`
+  return '本周期尚未形成稳定学习节奏，可以从一次短时学习开始。'
+})
+const assessmentText = computed(() => {
+  const count = Number(report.value?.overview?.assessmentCount || 0)
+  const averageScore = report.value?.overview?.averageScore
+  if (count && averageScore !== null && averageScore !== undefined) return `本周期完成 ${count} 次考核，平均成绩 ${averageScore} 分。`
+  if (count) return `本周期已参与 ${count} 次考核，成绩数据仍在汇总。`
+  return '本周期暂无考核记录，完成课程学习后可通过考核检验掌握情况。'
+})
+const nextSuggestion = computed(() => {
+  const overview = report.value?.overview || {}
+  if (!Number(overview.studyMinutes || 0)) return '先完成一次有效课程学习，建立本周学习记录。'
+  if (!Number(overview.completedPoints || 0)) return '继续当前课程，优先完成一个课程知识点。'
+  if (!Number(overview.assessmentCount || 0)) return '完成当前学习内容后，参加一次课程考核检验学习效果。'
+  return '保持当前学习频率，继续推进正在学习的课程内容。'
+})
+
+function highlightTypeText(type) {
+  return ({
+    LEARNING_CONTINUITY: '学习连续性',
+    POINT_COMPLETION: '内容完成',
+    ASSESSMENT: '考核表现',
+  })[type] || '学习表现'
+}
+
+function formatLocalDate(date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function currentWeeklyPeriod() {
+  const today = new Date()
+  const monday = new Date(today)
+  const day = today.getDay()
+  monday.setDate(today.getDate() - (day === 0 ? 6 : day - 1))
+  return {
+    periodStart: formatLocalDate(monday),
+    periodEnd: formatLocalDate(today),
+  }
+}
+
+function normalizeApiData(value) {
+  if (value && typeof value === 'object' && Object.prototype.hasOwnProperty.call(value, 'data')) {
+    return value.data
+  }
+  return value ?? null
+}
 
 function hydrateForm() {
   Object.assign(form, {
@@ -71,15 +126,20 @@ async function loadReport() {
   loading.value = true
   errorMessage.value = ''
   try {
-    const [current, condition] = await Promise.all([
+    const [currentResponse, conditionResponse] = await Promise.all([
       getCurrentReport('WEEKLY'),
       getReportEligibility('WEEKLY'),
     ])
+    const current = normalizeApiData(currentResponse)
+    const condition = normalizeApiData(conditionResponse)
+    const eligible = condition?.eligible === true || condition?.eligible === 1 || condition?.eligible === 'true'
     report.value = current
-    eligibility.value = condition
+    eligibility.value = condition ? { ...condition, eligible } : null
     if (isGenerating.value) {
       pollStartedAt = Date.now()
       pollReport(report.value.reportId, report.value.retryAfterSeconds || 2)
+    } else if (!current && eligible) {
+      await generateReport(false)
     }
   } catch (error) {
     errorMessage.value = error.message || '学习报告加载失败'
@@ -95,7 +155,11 @@ async function generateReport(regenerate = false) {
   try {
     const result = regenerate && report.value?.reportId
       ? await regenerateLearningReport(report.value.reportId)
-      : await createLearningReport('WEEKLY')
+      : await createLearningReport({
+          reportType: 'WEEKLY',
+          ...currentWeeklyPeriod(),
+          forceRegenerate: false,
+        })
     report.value = { ...result, progress: result.status === 'PENDING' ? 8 : result.progress }
     if (result.reportMode === 'GUIDANCE_ONLY') return
     if (result.status === 'SUCCESS') {
@@ -150,17 +214,17 @@ onBeforeUnmount(clearPolling)
         <button v-if="report?.status === 'SUCCESS'" :disabled="actionLoading" type="button" @click="generateReport(true)">重新生成</button>
       </header>
 
-      <div v-if="loading" class="report-state-card"><span class="report-spinner"></span><strong>正在整理你的学习数据</strong><p>请稍候，马上为你呈现</p></div>
+      <div v-if="loading" class="report-state-card"><span class="report-spinner"></span><strong>正在准备你的个性化学习报告</strong><p>检查本周学习数据，符合条件后将自动开始生成</p></div>
 
       <div v-else-if="errorMessage && !report" class="report-state-card error">
-        <strong>报告暂时无法加载</strong><p>{{ errorMessage }}</p><button type="button" @click="loadReport">重新加载</button>
+        <strong>报告暂时无法生成</strong><p>{{ errorMessage }}</p><button type="button" @click="loadReport">重新尝试</button>
       </div>
 
       <div v-else-if="!report" class="report-welcome">
         <div class="report-orb">AI</div><span>你的专属学习洞察</span><h3>让每一次学习都有迹可循</h3>
         <p>系统将分析学习时长、课程进度和考核表现，为你总结优势、定位待提升知识点，并规划下一步学习任务。</p>
         <div class="eligibility-row"><span>数据质量 {{ eligibility?.dataQuality?.score || 0 }}%</span><span>已记录 {{ eligibility?.validLearningEventCount || 0 }} 次学习行为</span></div>
-        <button v-if="eligibility?.eligible" :disabled="actionLoading" type="button" @click="generateReport(false)">{{ actionLoading ? '正在创建…' : '生成本周报告' }}</button>
+        <button v-if="eligibility?.eligible" :disabled="actionLoading" type="button" @click="generateReport(false)">{{ actionLoading ? '正在创建生成任务…' : '立即生成本周报告' }}</button>
         <button v-else class="secondary" type="button" @click="emit('open-courses')">去完成一次学习</button>
         <small v-if="!eligibility?.eligible">{{ eligibility?.reasonMessage || '完成课程学习后即可生成报告' }}</small>
       </div>
@@ -191,15 +255,35 @@ onBeforeUnmount(clearPolling)
           <div class="quality-line"><span>数据质量 · {{ qualityText }}</span><i><b :style="{ width: `${report.dataQuality?.score || 0}%` }"></b></i><strong>{{ report.dataQuality?.score || 0 }}%</strong></div>
         </article>
 
-        <div class="report-detail-grid">
-          <article class="insight-card strengths"><header><span>✓</span><div><h3>学习优势</h3><p>继续保持这些良好表现</p></div></header><div v-for="item in report.strengths || []" :key="item.knowledgePointId" class="knowledge-row"><div><strong>{{ item.name }}</strong><p>{{ item.analysis }}</p></div><em>{{ item.masteryScore }}%</em></div><p v-if="!report.strengths?.length" class="muted">继续学习，更多优势正在被发现</p></article>
-          <article class="insight-card weaknesses"><header><span>!</span><div><h3>重点提升</h3><p>建议优先关注的知识点</p></div></header><div v-for="item in report.weaknesses || []" :key="item.knowledgePointId" class="knowledge-row"><div><strong>{{ item.name }}</strong><p>{{ item.analysis }}</p></div><em>{{ item.masteryScore }}%</em></div><p v-if="!report.weaknesses?.length" class="muted">本周暂无明显薄弱项</p></article>
+        <article class="report-content-card highlights-card">
+          <header class="report-section-heading"><div><span>本周表现</span><h3>学习亮点</h3></div><p>值得肯定的学习行为与成果</p></header>
+          <div v-if="report.highlights?.length" class="highlight-list">
+            <div v-for="(highlight, index) in report.highlights" :key="`${highlight.type}-${index}`" class="highlight-item">
+              <b>{{ index + 1 }}</b>
+              <div><span>{{ highlightTypeText(highlight.type) }}</span><strong>{{ highlight.title }}</strong><p>{{ highlight.description }}</p><small v-if="highlight.evidence?.length">{{ highlight.evidence.join(' · ') }}</small></div>
+            </div>
+          </div>
+          <p v-else class="report-empty-copy">本周期暂无可展示的学习亮点，继续完成课程学习后会自动更新。</p>
+        </article>
+
+        <div class="report-analysis-grid">
+          <article class="report-content-card compact-report-card"><span>学习节奏</span><h3>{{ report.overview?.activeDays || 0 }} 个活跃日</h3><p>{{ learningRhythmText }}</p></article>
+          <article class="report-content-card compact-report-card assessment-overview"><span>考核表现</span><h3>{{ report.overview?.averageScore ?? '--' }} 分</h3><p>{{ assessmentText }}</p></article>
         </div>
 
-        <article class="study-plan-card"><header><div><span>下一步</span><h3>推荐学习计划</h3></div><p>按顺序完成，效果更佳</p></header><div v-for="plan in report.studyPlan || []" :key="plan.sequence" class="plan-row"><b>{{ plan.sequence }}</b><div><strong>{{ plan.title }}</strong><p>{{ plan.action }}</p><span>{{ plan.reason }}</span></div><em>{{ plan.estimatedMinutes }} 分钟</em></div><p v-if="!report.studyPlan?.length" class="muted">保持当前节奏，新的学习计划将在下期更新</p></article>
+        <div class="report-analysis-grid">
+          <article class="report-content-card compact-report-card"><span>数据说明</span><h3>分析限制</h3><ul v-if="report.dataQuality?.limitations?.length"><li v-for="item in report.dataQuality.limitations" :key="item">{{ item }}</li></ul><p v-else>当前数据质量良好，暂无额外分析限制。</p></article>
+          <article class="report-content-card compact-report-card next-suggestion"><span>下一步</span><h3>通用学习建议</h3><p>{{ nextSuggestion }}</p><button type="button" @click="emit('open-courses')">进入我的课程</button></article>
+        </div>
 
         <footer class="report-footer"><p>“{{ report.encouragement || '保持学习节奏，每一点进步都值得记录。' }}”</p><div><span>{{ feedback === null ? '这份报告对你有帮助吗？' : '感谢你的反馈' }}</span><button :class="{ active: feedback === true }" type="button" @click="sendFeedback(true)">有帮助</button><button :class="{ active: feedback === false }" type="button" @click="sendFeedback(false)">待改进</button></div><small>{{ report.disclaimer }}</small></footer>
       </template>
+
+      <div v-else class="report-welcome">
+        <div class="report-orb">AI</div><h3>本周报告尚未生成</h3>
+        <p>点击下方按钮创建个性化学习报告，系统会在生成完成后自动展示。</p>
+        <button :disabled="actionLoading" type="button" @click="generateReport(false)">{{ actionLoading ? '正在创建生成任务…' : '生成本周报告' }}</button>
+      </div>
 
       <p v-if="errorMessage && report" class="report-inline-error">{{ errorMessage }}</p>
     </section>
