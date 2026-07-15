@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue'
 import BrandLogo from '../components/BrandLogo.vue'
+import MessagePopover from '../components/messages/MessagePopover.vue'
 
 const props = defineProps({
   user: {
@@ -116,6 +117,7 @@ const showBreadcrumb = computed(() => ['courseDetail', 'courseLearning', 'assess
             <input placeholder="搜索课程、资源、专题" />
             <svg viewBox="0 0 24 24"><path d="m20 18.6-4.7-4.7A7 7 0 1 0 13.9 15.3l4.7 4.7 1.4-1.4ZM5 10a5 5 0 1 1 10 0 5 5 0 0 1-10 0Z" /></svg>
           </label>
+          <MessagePopover />
           <div class="user-box">
             <span class="avatar">{{ (user.nickname || user.username || '学').slice(0, 1) }}</span>
             <strong>{{ user.nickname || user.username || '学员' }}</strong>
