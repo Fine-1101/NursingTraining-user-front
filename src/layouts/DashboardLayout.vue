@@ -42,8 +42,16 @@ const moduleTitles = {
   },
 }
 
-const pageMeta = computed(() => moduleTitles[props.activeModule] || moduleTitles.home)
-const showBreadcrumb = computed(() => ['courseDetail', 'courseLearning'].includes(props.activeModule))
+const pageMeta = computed(() => {
+  if (props.activeModule === 'assessmentResult') {
+    return {
+      title: '考核成绩',
+      subtitle: '首页 > 我的课程 > 课程详情 > 考核成绩',
+    }
+  }
+  return moduleTitles[props.activeModule] || moduleTitles.home
+})
+const showBreadcrumb = computed(() => ['courseDetail', 'courseLearning', 'assessmentResult'].includes(props.activeModule))
 </script>
 
 <template>
@@ -95,6 +103,10 @@ const showBreadcrumb = computed(() => ['courseDetail', 'courseLearning'].include
             <template v-if="activeModule === 'courseLearning'">
               <span>></span>
               <strong>课程学习</strong>
+            </template>
+            <template v-if="activeModule === 'assessmentResult'">
+              <span>></span>
+              <strong>考核成绩</strong>
             </template>
           </p>
         </div>

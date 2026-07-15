@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { getLearnerCourseDetail } from '../../api/learnerCourses'
+import CourseAssessmentPanel from '../assessments/CourseAssessmentPanel.vue'
 
 const props = defineProps({
   courseId: {
@@ -9,12 +10,13 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['back', 'start-learning'])
+const emit = defineEmits(['back', 'start-learning', 'start-assessment', 'view-assessment-result'])
 
 const loading = ref(false)
 const errorMessage = ref('')
 const course = ref(null)
 const expandedChapterIds = ref(new Set())
+const detailTab = ref('directory')
 
 const progressPercent = computed(() => Math.round(Number(course.value?.progressPercent || 0)))
 const courseTags = computed(() => {
@@ -72,6 +74,13 @@ function pointStatusClass(status) {
   return 'not-started'
 }
 
+function learningActionText(status, fallbackText) {
+  if (fallbackText) return fallbackText
+  if (status === 'COMPLETED') return '复习课程'
+  if (status === 'LEARNING') return '继续学习'
+  return '开始学习'
+}
+
 function toggleChapter(chapterId) {
   const next = new Set(expandedChapterIds.value)
   if (next.has(chapterId)) {
@@ -87,7 +96,7 @@ function isChapterExpanded(chapter) {
 }
 
 function handleMainAction() {
-  if (!course.value?.nextPointId) return
+  if (!course.value) return
   emit('start-learning', {
     courseId: course.value.courseId,
     pointId: course.value.nextPointId,
@@ -155,8 +164,8 @@ watch(() => props.courseId, loadCourseDetail)
               <strong>{{ progressPercent }}%</strong>
             </div>
             <p>{{ course.progressSummary?.displayText || `已完成 ${course.completedPointCount || 0} / ${course.pointCount || 0}` }}</p>
-            <button class="detail-main-button" type="button" :disabled="!course.nextPointId" @click="handleMainAction">
-              {{ course.nextPointId ? course.buttonText : '课程内容暂未配置' }}
+            <button class="detail-main-button" type="button" @click="handleMainAction">
+              {{ learningActionText(course.learningStatus, course.buttonText) }}
             </button>
           </div>
         </section>
@@ -187,6 +196,16 @@ watch(() => props.courseId, loadCourseDetail)
       </aside>
 
       <section class="detail-right">
+        <div class="course-detail-tabs">
+          <button type="button" :class="{ active: detailTab === 'directory' }" @click="detailTab = 'directory'">
+            课程目录
+          </button>
+          <button type="button" :class="{ active: detailTab === 'assessment' }" @click="detailTab = 'assessment'">
+            课程考核
+          </button>
+        </div>
+
+        <template v-if="detailTab === 'directory'">
         <div class="detail-directory-head">
           <div>
             <h2>课程目录</h2>
@@ -224,6 +243,14 @@ watch(() => props.courseId, loadCourseDetail)
             </button>
           </div>
         </article>
+        </template>
+
+        <CourseAssessmentPanel
+          v-else
+          :course-id="course.courseId"
+          @start-exam="emit('start-assessment', $event)"
+          @view-result="emit('view-assessment-result', $event)"
+        />
       </section>
     </div>
   </div>

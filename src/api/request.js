@@ -26,6 +26,23 @@ export function getStoredUser() {
   }
 }
 
+function createRequestError(result, response) {
+  const error = new Error(result?.message || `Request failed: ${response.status}`)
+  error.code = result?.code
+  error.status = response.status
+  error.data = result?.data
+  return error
+}
+
+function isAuthExpired(result, response) {
+  return response.status === 401 || result?.code === 401
+}
+
+function notifyAuthExpired() {
+  clearAuthSession()
+  window.dispatchEvent(new CustomEvent('auth-expired'))
+}
+
 export async function request(path, options = {}) {
   const token = getAccessToken()
   const headers = {
@@ -42,11 +59,17 @@ export async function request(path, options = {}) {
   const result = await response.json().catch(() => null)
 
   if (!response.ok) {
-    throw new Error(result?.message || `请求失败：${response.status}`)
+    if (isAuthExpired(result, response)) {
+      notifyAuthExpired()
+    }
+    throw createRequestError(result, response)
   }
 
   if (result && typeof result.code === 'number' && result.code !== 0) {
-    throw new Error(result.message || '业务请求失败')
+    if (isAuthExpired(result, response)) {
+      notifyAuthExpired()
+    }
+    throw createRequestError(result, response)
   }
 
   return result?.data ?? result

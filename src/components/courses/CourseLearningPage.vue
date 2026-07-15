@@ -25,6 +25,11 @@ const activeResourceIndex = ref(0)
 const videoRef = ref(null)
 const lastSavedSecond = ref(-1)
 const autoSaveTimer = ref(null)
+const maxWatchedSecond = ref(0)
+const correctingSeek = ref(false)
+const videoSeekMessage = ref('')
+
+const SEEK_GRACE_SECONDS = 0.35
 
 const tabs = computed(() => {
   const source = studyData.value?.tabs || {}
@@ -137,7 +142,99 @@ function switchResource(index) {
 function restoreVideoPosition() {
   if (activeType.value !== 'VIDEO' || !videoRef.value || !activeResource.value) return
   const position = Number(activeResource.value.lastPositionSeconds || 0)
+  maxWatchedSecond.value = Math.max(
+    Number(activeResource.value.maxPositionSeconds || 0),
+    Number(activeResource.value.lastPositionSeconds || 0),
+  )
+  videoSeekMessage.value = ''
+  if (!canChangeSpeed()) videoRef.value.playbackRate = 1
   if (position > 0) videoRef.value.currentTime = position
+}
+
+function canDragVideo(resource = activeResource.value) {
+  return resource?.allowDrag !== false
+}
+
+function canChangeSpeed(resource = activeResource.value) {
+  return resource?.allowSpeed !== false
+}
+
+function videoControlsList(resource = activeResource.value) {
+  const controls = []
+  if (resource?.allowDownload === false) controls.push('nodownload')
+  if (!canChangeSpeed(resource)) controls.push('noplaybackrate')
+  return controls.join(' ')
+}
+
+function getMaxAllowedSecond(resource = activeResource.value) {
+  return Math.max(
+    maxWatchedSecond.value,
+    Number(resource?.maxPositionSeconds || 0),
+    Number(resource?.lastPositionSeconds || 0),
+  )
+}
+
+function handleVideoLoadedMetadata() {
+  restoreVideoPosition()
+}
+
+function handleVideoRateChange() {
+  if (!videoRef.value || canChangeSpeed()) return
+  if (videoRef.value.playbackRate === 1) return
+  videoRef.value.playbackRate = 1
+  videoSeekMessage.value = '当前视频不允许倍速播放，已恢复为 1.0 倍速'
+}
+
+function handleVideoTimeUpdate() {
+  if (activeType.value !== 'VIDEO' || !videoRef.value || !activeResource.value || correctingSeek.value) return
+  const current = Number(videoRef.value.currentTime || 0)
+  const maxAllowedSecond = getMaxAllowedSecond()
+  if (!canDragVideo() && current > maxAllowedSecond + SEEK_GRACE_SECONDS) {
+    correctingSeek.value = true
+    videoRef.value.currentTime = maxAllowedSecond
+    videoSeekMessage.value = '请先观看前面的内容，已为你回到最远观看位置'
+    window.setTimeout(() => {
+      correctingSeek.value = false
+    }, 0)
+    return
+  }
+
+  maxWatchedSecond.value = Math.max(
+    maxWatchedSecond.value,
+    Number(activeResource.value.maxPositionSeconds || 0),
+    current,
+  )
+}
+
+function handleVideoSeeking() {
+  if (activeType.value !== 'VIDEO' || !videoRef.value || !activeResource.value) return
+  if (canDragVideo()) {
+    videoSeekMessage.value = ''
+    return
+  }
+
+  const video = videoRef.value
+  const targetSecond = Number(video.currentTime || 0)
+  const maxAllowedSecond = getMaxAllowedSecond()
+
+  if (targetSecond <= maxAllowedSecond + SEEK_GRACE_SECONDS) {
+    videoSeekMessage.value = ''
+    return
+  }
+
+  correctingSeek.value = true
+  video.currentTime = maxAllowedSecond
+  videoSeekMessage.value = '请先观看前面的内容，已为你回到最远观看位置'
+  window.setTimeout(() => {
+    correctingSeek.value = false
+  }, 0)
+}
+
+function handleVideoSeeked() {
+  if (!correctingSeek.value) return
+  window.setTimeout(() => {
+    correctingSeek.value = false
+  }, 0)
 }
 
 function startAutoSave() {
@@ -180,6 +277,7 @@ async function saveCurrentVideoProgress(eventType, ended = false) {
       maxPositionSeconds: result.maxPositionSeconds,
       completed: result.completed,
     })
+    maxWatchedSecond.value = Math.max(maxWatchedSecond.value, Number(result.maxPositionSeconds || currentSeconds))
   } catch (error) {
     errorMessage.value = error.message || '视频进度保存失败'
   } finally {
@@ -275,12 +373,18 @@ onBeforeUnmount(() => {
                 :src="resolveAssetUrl(activeResource.playUrl)"
                 :poster="resolveAssetUrl(activeResource.coverUrl)"
                 controls
-                :controlsList="activeResource.allowDownload ? '' : 'nodownload'"
+                :controlsList="videoControlsList(activeResource)"
+                @loadedmetadata="handleVideoLoadedMetadata"
+                @timeupdate="handleVideoTimeUpdate"
+                @seeking="handleVideoSeeking"
+                @seeked="handleVideoSeeked"
+                @ratechange="handleVideoRateChange"
                 @play="saveCurrentVideoProgress('PLAY')"
                 @pause="saveCurrentVideoProgress('PAUSE')"
                 @ended="saveCurrentVideoProgress('ENDED', true)"
               ></video>
             </div>
+            <p v-if="videoSeekMessage" class="video-seek-message">{{ videoSeekMessage }}</p>
             <div class="resource-summary">
               <h3>{{ displayText(activeResource.title) }}</h3>
               <p>{{ activeResource.description || '暂无视频简介' }}</p>
