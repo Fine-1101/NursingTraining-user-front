@@ -78,3 +78,17 @@ export async function request(path, options = {}) {
 
   return result
 }
+
+export async function requestBlob(path, options = {}) {
+  const token = getAccessToken()
+  const response = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...options.headers },
+  })
+  if (!response.ok) {
+    const result = await response.json().catch(() => null)
+    if (isAuthExpired(result, response)) notifyAuthExpired()
+    throw createRequestError(result, response)
+  }
+  return response.blob()
+}

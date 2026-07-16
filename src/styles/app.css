@@ -2233,6 +2233,46 @@ a {
   border: 0;
 }
 
+.ppt-viewer-fallback {
+  display: grid;
+  height: auto;
+  min-height: 260px;
+  place-items: center;
+  padding: 28px;
+}
+
+.ppt-fallback {
+  max-width: 520px;
+  text-align: center;
+}
+
+.ppt-fallback strong {
+  display: block;
+  color: #172033;
+  font-size: 18px;
+}
+
+.ppt-fallback p {
+  margin: 10px 0 18px;
+  color: #64748b;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.ppt-fallback a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 18px;
+  border-radius: 8px;
+  background: #168c28;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
 .study-actions {
   display: flex;
   align-items: center;

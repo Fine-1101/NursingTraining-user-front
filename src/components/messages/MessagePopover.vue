@@ -7,6 +7,7 @@ import {
   markMessageRead,
   resolveWebSocketUrl,
 } from '../../api/learnerMessages'
+import { getAccessToken } from '../../api/request'
 
 const open = ref(false)
 const loading = ref(false)
@@ -115,7 +116,7 @@ function showNotification(message) {
 }
 
 function scheduleReconnect() {
-  if (manuallyClosed) return
+  if (manuallyClosed || !getAccessToken()) return
   const baseDelay = Math.min(30000, 1000 * (2 ** reconnectAttempt))
   const jitter = Math.floor(Math.random() * 500)
   reconnectAttempt += 1
@@ -125,7 +126,7 @@ function scheduleReconnect() {
 }
 
 async function connectWebSocket() {
-  if (manuallyClosed) return
+  if (manuallyClosed || !getAccessToken()) return
 
   try {
     const { ticket, webSocketPath } = await getWebSocketTicket()
@@ -155,7 +156,11 @@ async function connectWebSocket() {
     socket.onerror = () => {
       socket?.close()
     }
-  } catch {
+  } catch (error) {
+    if (error?.status === 401 || !getAccessToken()) {
+      closeWebSocket()
+      return
+    }
     scheduleReconnect()
   }
 }

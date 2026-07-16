@@ -2,16 +2,11 @@
 import BrandLogo from '../BrandLogo.vue'
 import LoginPanel from './LoginPanel.vue'
 import RegisterPanel from './RegisterPanel.vue'
-import RoleSelectPanel from './RoleSelectPanel.vue'
 
 defineProps({
   view: {
     type: String,
     required: true,
-  },
-  selectedRole: {
-    type: String,
-    default: '',
   },
   registerLoading: {
     type: Boolean,
@@ -27,8 +22,6 @@ const emit = defineEmits([
   'login-success',
   'show-register',
   'show-login',
-  'register-next',
-  'select-role',
   'register-complete',
 ])
 </script>
@@ -56,20 +49,11 @@ const emit = defineEmits([
               @register="emit('show-register')"
             />
             <RegisterPanel
-              v-else-if="view === 'registerInfo'"
-              key="register-info"
-              @next="emit('register-next', $event)"
-              @login="emit('show-login')"
-            />
-            <RoleSelectPanel
               v-else
-              key="register-role"
-              :selected-role="selectedRole"
+              key="register-info"
               :loading="registerLoading"
               :error-message="registerError"
-              @select-role="emit('select-role', $event)"
-              @back="emit('show-register')"
-              @complete="emit('register-complete')"
+              @complete="emit('register-complete', $event)"
               @login="emit('show-login')"
             />
           </Transition>

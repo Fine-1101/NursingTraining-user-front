@@ -1,6 +1,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { getLearnerCourseStudy, saveLearnerVideoProgress } from '../../api/learnerCourses'
+import { completeLearnerResource, getLearnerCourseStudy, getLearnerPptPreview, saveLearnerVideoProgress } from '../../api/learnerCourses'
 
 const props = defineProps({
   courseId: {
@@ -28,6 +28,10 @@ const autoSaveTimer = ref(null)
 const maxWatchedSecond = ref(0)
 const correctingSeek = ref(false)
 const videoSeekMessage = ref('')
+const pptObjectUrl = ref('')
+const pptPreviewLoading = ref(false)
+const pptPreviewError = ref('')
+const completingResources = new Set()
 
 const SEEK_GRACE_SECONDS = 0.35
 
@@ -45,12 +49,50 @@ const activeResource = computed(() => activeTab.value?.list?.[activeResourceInde
 const course = computed(() => studyData.value?.course || {})
 const currentPoint = computed(() => studyData.value?.currentPoint || {})
 const navigation = computed(() => studyData.value?.navigation || {})
+const activePptUrl = computed(() => activeType.value === 'PPT' ? pptObjectUrl.value : '')
 
 function resolveAssetUrl(url) {
   if (!url) return ''
   if (/^(https?:)?\/\//.test(url) || url.startsWith('data:')) return url
   const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
   return url.startsWith('/') ? `${apiBase}${url}` : `${apiBase}/${url}`
+}
+
+function getUrlPath(url) {
+  const value = String(url || '').trim()
+  if (!value) return ''
+  try {
+    return decodeURIComponent(new URL(value, window.location.origin).pathname).toLowerCase()
+  } catch {
+    return decodeURIComponent(value.split(/[?#]/)[0]).toLowerCase()
+  }
+}
+
+function canInlinePreviewPpt(resource = activeResource.value) {
+  return Boolean(resource?.previewUrl) && Boolean(pptObjectUrl.value)
+}
+
+function revokePptObjectUrl() {
+  if (pptObjectUrl.value) URL.revokeObjectURL(pptObjectUrl.value)
+  pptObjectUrl.value = ''
+}
+
+async function loadActivePptPreview() {
+  revokePptObjectUrl()
+  pptPreviewError.value = ''
+  const previewUrl = activeType.value === 'PPT' ? activeResource.value?.previewUrl : ''
+  if (!previewUrl) return
+  pptPreviewLoading.value = true
+  try {
+    const blob = await getLearnerPptPreview(previewUrl)
+    if (activeType.value === 'PPT' && activeResource.value?.previewUrl === previewUrl) {
+      pptObjectUrl.value = URL.createObjectURL(blob)
+    }
+  } catch (error) {
+    pptPreviewError.value = error.message || 'PPT 预览加载失败'
+  } finally {
+    pptPreviewLoading.value = false
+  }
 }
 
 function displayText(value) {
@@ -116,6 +158,8 @@ async function loadStudy(nextPointId = currentPointId.value, nextType = activeTy
     await nextTick()
     restoreVideoPosition()
     startAutoSave()
+    void completeActiveNonVideoResource()
+    void loadActivePptPreview()
   } catch (error) {
     studyData.value = null
     errorMessage.value = error.message || '课程学习内容加载失败'
@@ -125,18 +169,60 @@ async function loadStudy(nextPointId = currentPointId.value, nextType = activeTy
 }
 
 function switchTab(type) {
-  if (activeType.value === type) return
+  if (activeType.value === type) {
+    void completeActiveNonVideoResource()
+    return
+  }
   saveCurrentVideoProgress('LEAVE')
   activeType.value = type
   activeResourceIndex.value = 0
-  nextTick(restoreVideoPosition)
+  nextTick(() => {
+    restoreVideoPosition()
+    void completeActiveNonVideoResource()
+    void loadActivePptPreview()
+  })
 }
 
 function switchResource(index) {
   if (activeResourceIndex.value === index) return
   saveCurrentVideoProgress('LEAVE')
   activeResourceIndex.value = index
-  nextTick(restoreVideoPosition)
+  nextTick(() => {
+    restoreVideoPosition()
+    void completeActiveNonVideoResource()
+    void loadActivePptPreview()
+  })
+}
+
+async function completeActiveNonVideoResource() {
+  const resource = activeResource.value
+  const type = activeType.value
+  if (!resource || (type !== 'ARTICLE' && type !== 'PPT') || resource.learningStatus === 'COMPLETED') return
+
+  const resourceType = type === 'ARTICLE' ? 1 : 3
+  const resourceId = type === 'ARTICLE' ? resource.articleId : resource.pptId
+  if (!resourceId) return
+  const key = `${currentPointId.value}:${resourceType}:${resourceId}`
+  if (completingResources.has(key)) return
+  completingResources.add(key)
+
+  try {
+    await completeLearnerResource(props.courseId, currentPointId.value, resourceType, resourceId)
+    Object.assign(resource, { learningStatus:'COMPLETED', progressPercent:100, completed:true })
+
+    const refreshed = await getLearnerCourseStudy(props.courseId, currentPointId.value, type)
+    const currentId = resourceId
+    studyData.value = refreshed
+    activeType.value = type
+    const refreshedList = type === 'ARTICLE' ? refreshed.tabs?.articles : refreshed.tabs?.ppts
+    const idField = type === 'ARTICLE' ? 'articleId' : 'pptId'
+    const refreshedIndex = (refreshedList || []).findIndex(item => item[idField] === currentId)
+    activeResourceIndex.value = refreshedIndex >= 0 ? refreshedIndex : 0
+  } catch (error) {
+    errorMessage.value = error.message || '课件学习进度保存失败'
+  } finally {
+    completingResources.delete(key)
+  }
 }
 
 function restoreVideoPosition() {
@@ -298,9 +384,14 @@ watch(() => props.pointId, (nextPointId) => {
   loadStudy(nextPointId)
 })
 
+watch([activeType, activeResource], () => {
+  void loadActivePptPreview()
+})
+
 onBeforeUnmount(() => {
   saveCurrentVideoProgress('LEAVE')
   stopAutoSave()
+  revokePptObjectUrl()
 })
 </script>
 
@@ -401,8 +492,16 @@ onBeforeUnmount(() => {
           </template>
 
           <template v-else-if="activeType === 'PPT'">
-            <div class="ppt-viewer">
-              <iframe :src="resolveAssetUrl(activeResource.previewUrl)" :title="displayText(activeResource.title)"></iframe>
+            <div class="ppt-viewer" :class="{ 'ppt-viewer-fallback': !canInlinePreviewPpt(activeResource) }">
+              <iframe
+                v-if="canInlinePreviewPpt(activeResource)"
+                :src="activePptUrl"
+                :title="displayText(activeResource.title)"
+              ></iframe>
+              <div v-else class="ppt-fallback">
+                <strong>{{ pptPreviewLoading ? 'PPT 正在加载' : (pptPreviewError || 'PPT 正在转换，请稍后刷新') }}</strong>
+                <p>系统正在生成或读取 PDF 预览文件，完成后即可在页面内翻页查看。</p>
+              </div>
             </div>
             <div class="resource-summary">
               <h3>{{ displayText(activeResource.title) }}</h3>

@@ -16,7 +16,13 @@ import { logout, register } from './api/auth'
 import { getLearnerCourseDetail } from './api/learnerCourses'
 import './styles/app.css'
 
-const page = ref(getStoredUser().username ? 'dashboard' : 'auth')
+const initialUser = getStoredUser()
+if (initialUser.username && String(initialUser.role) !== '1') {
+  clearAuthSession()
+  Object.keys(initialUser).forEach((key) => delete initialUser[key])
+}
+
+const page = ref(initialUser.username ? 'dashboard' : 'auth')
 const activeModule = ref('home')
 const selectedCourseId = ref(null)
 const selectedPointId = ref(null)
@@ -25,11 +31,9 @@ const selectedAttemptId = ref(null)
 const assessmentResultPayload = ref(null)
 const assessmentResultReturnModule = ref('courseDetail')
 const authView = ref('login')
-const selectedRole = ref('')
-const registerDraft = ref({})
 const registerLoading = ref(false)
 const registerError = ref('')
-const currentUser = ref(getStoredUser())
+const currentUser = ref(initialUser)
 const courseSearchKeyword = ref('')
 const courseSearchKey = ref(0)
 
@@ -60,29 +64,17 @@ function showRegister() {
   authView.value = 'registerInfo'
 }
 
-function goRoleSelect(form) {
-  registerDraft.value = form
+async function completeRegister(form) {
   registerError.value = ''
-  authView.value = 'registerRole'
-}
-
-async function completeRegister() {
-  registerError.value = ''
-
-  if (!selectedRole.value) {
-    selectedRole.value = 'student'
-  }
-
   registerLoading.value = true
 
   try {
-    const roleType = selectedRole.value === 'teacher' ? 2 : 1
     const session = await register({
-      username: registerDraft.value.username,
-      password: registerDraft.value.password,
-      realName: registerDraft.value.realName,
-      deptId: registerDraft.value.deptId,
-      roleType,
+      username: form.username,
+      password: form.password,
+      realName: form.realName,
+      deptId: form.deptId,
+      roleType: 1,
     })
 
     currentUser.value = session.user || getStoredUser()
@@ -95,7 +87,12 @@ async function completeRegister() {
 }
 
 function handleLoginSuccess(user) {
-  currentUser.value = user || getStoredUser()
+  const nextUser = user || getStoredUser()
+  if (String(nextUser?.role) !== '1') {
+    resetToLogin()
+    return
+  }
+  currentUser.value = nextUser
   page.value = 'dashboard'
 }
 
@@ -193,14 +190,11 @@ onBeforeUnmount(() => {
       <AuthPage
         v-if="page === 'auth'"
         :view="authView"
-        :selected-role="selectedRole"
         :register-loading="registerLoading"
         :register-error="registerError"
         @login-success="handleLoginSuccess"
         @show-register="showRegister"
         @show-login="showLogin"
-        @register-next="goRoleSelect"
-        @select-role="selectedRole = $event"
         @register-complete="completeRegister"
       />
 

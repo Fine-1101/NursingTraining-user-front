@@ -1,4 +1,4 @@
-import { request } from './request'
+import { request, requestBlob } from './request'
 
 export function getLearnerCourses(params = {}) {
   const query = new URLSearchParams()
@@ -41,4 +41,15 @@ export function saveLearnerVideoProgress(courseId, pointId, videoId, payload) {
     method: 'POST',
     body: JSON.stringify(payload),
   })
+}
+
+export function completeLearnerResource(courseId, pointId, resourceType, resourceId) {
+  const query = new URLSearchParams({ resourceType:String(resourceType), resourceId:String(resourceId) })
+  return request(`/api/learner/courses/${courseId}/points/${pointId}/resources/complete?${query}`, {
+    method: 'POST',
+  })
+}
+
+export function getLearnerPptPreview(previewUrl) {
+  return requestBlob(previewUrl)
 }

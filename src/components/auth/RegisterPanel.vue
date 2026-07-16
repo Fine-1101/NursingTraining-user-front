@@ -1,7 +1,18 @@
 <script setup>
 import { reactive, ref } from 'vue'
 
-const emit = defineEmits(['next', 'login'])
+const props = defineProps({
+  loading: {
+    type: Boolean,
+    default: false,
+  },
+  errorMessage: {
+    type: String,
+    default: '',
+  },
+})
+
+const emit = defineEmits(['complete', 'login'])
 
 const form = reactive({
   username: '',
@@ -15,7 +26,7 @@ const showPassword = ref(false)
 const showConfirmPassword = ref(false)
 const errorMessage = ref('')
 
-function submitNext() {
+function submitRegister() {
   errorMessage.value = ''
 
   if (form.password !== form.confirmPassword) {
@@ -23,7 +34,7 @@ function submitNext() {
     return
   }
 
-  emit('next', {
+  emit('complete', {
     username: form.username,
     realName: form.realName,
     password: form.password,
@@ -42,7 +53,7 @@ function submitNext() {
       <p>请填写基本信息，创建您的学习账号</p>
     </div>
 
-    <form class="register-form" @submit.prevent="submitNext">
+    <form class="register-form" @submit.prevent="submitRegister">
       <label>
         <span>用户名 <em>*</em></span>
         <input v-model.trim="form.username" placeholder="请输入用户名，6-20位字母、数字或下划线" required />
@@ -74,8 +85,10 @@ function submitNext() {
         <input v-model.number="form.deptId" type="number" min="1" placeholder="请输入科室ID" required />
       </label>
 
-      <p v-if="errorMessage" class="form-error">{{ errorMessage }}</p>
-      <button class="primary-button wide-button" type="submit">下一步</button>
+      <p v-if="errorMessage || props.errorMessage" class="form-error">{{ errorMessage || props.errorMessage }}</p>
+      <button class="primary-button wide-button" type="submit" :disabled="props.loading">
+        {{ props.loading ? '注册中...' : '注册学生账号' }}
+      </button>
       <p class="signin-link">已有账号，<button type="button" @click="emit('login')">去登录</button></p>
     </form>
   </div>
