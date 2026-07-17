@@ -24,19 +24,28 @@ const option = computed(() => ({
     {
       name: '课件分布',
       type: 'pie',
-      radius: [24, 118],
+      radius: '68%',
       center: ['38%', '52%'],
-      roseType: 'radius',
       itemStyle: {
-        borderRadius: 4,
+        borderColor: '#fff',
+        borderWidth: 2,
       },
       label: {
         formatter: '{d}%',
+        color: '#4b5563',
+        fontSize: 12,
+      },
+      labelLine: {
+        length: 18,
+        length2: 14,
+        lineStyle: {
+          color: '#159947',
+        },
       },
       data: props.items.map((item) => ({
         name: item.resourceTypeName || item.resourceType,
         value: Number(item.count || 0),
-      })),
+      })).filter(item => item.value > 0),
     },
   ],
 }))

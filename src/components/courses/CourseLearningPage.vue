@@ -32,6 +32,7 @@ const pptObjectUrl = ref('')
 const pptPreviewLoading = ref(false)
 const pptPreviewError = ref('')
 const completingResources = new Set()
+const studyLoadVersion = ref(0)
 
 const SEEK_GRACE_SECONDS = 0.35
 
@@ -130,26 +131,41 @@ function formatDuration(seconds) {
 }
 
 function pickDefaultType(data) {
-  if (data.currentPoint?.activeType) return data.currentPoint.activeType
+  const availableTypes = [
+    data.tabs?.videos?.length ? 'VIDEO' : '',
+    data.tabs?.articles?.length ? 'ARTICLE' : '',
+    data.tabs?.ppts?.length ? 'PPT' : '',
+  ].filter(Boolean)
+  const requestedType = String(data.currentPoint?.activeType || '').toUpperCase()
+  if (availableTypes.includes(requestedType)) return requestedType
   if (data.tabs?.videos?.length) return 'VIDEO'
   if (data.tabs?.articles?.length) return 'ARTICLE'
   if (data.tabs?.ppts?.length) return 'PPT'
   return ''
 }
 
-async function loadStudy(nextPointId = currentPointId.value, nextType = activeType.value) {
+async function loadStudy(nextPointId = currentPointId.value, nextType = '') {
   if (!nextPointId) {
     studyData.value = null
     errorMessage.value = '课程内容暂未配置'
     return
   }
 
+  const loadVersion = studyLoadVersion.value + 1
+  studyLoadVersion.value = loadVersion
   loading.value = true
   errorMessage.value = ''
   stopAutoSave()
+  revokePptObjectUrl()
+  pptPreviewError.value = ''
+  pptPreviewLoading.value = false
+  activeType.value = ''
+  activeResourceIndex.value = 0
+  studyData.value = null
 
   try {
     const data = await getLearnerCourseStudy(props.courseId, nextPointId, nextType)
+    if (loadVersion !== studyLoadVersion.value) return
     studyData.value = data
     currentPointId.value = data.currentPoint?.pointId || nextPointId
     activeType.value = pickDefaultType(data)
@@ -161,10 +177,11 @@ async function loadStudy(nextPointId = currentPointId.value, nextType = activeTy
     void completeActiveNonVideoResource()
     void loadActivePptPreview()
   } catch (error) {
+    if (loadVersion !== studyLoadVersion.value) return
     studyData.value = null
     errorMessage.value = error.message || '课程学习内容加载失败'
   } finally {
-    loading.value = false
+    if (loadVersion === studyLoadVersion.value) loading.value = false
   }
 }
 
@@ -197,20 +214,24 @@ function switchResource(index) {
 async function completeActiveNonVideoResource() {
   const resource = activeResource.value
   const type = activeType.value
+  const pointId = currentPointId.value
+  const loadVersion = studyLoadVersion.value
   if (!resource || (type !== 'ARTICLE' && type !== 'PPT') || resource.learningStatus === 'COMPLETED') return
 
   const resourceType = type === 'ARTICLE' ? 1 : 3
   const resourceId = type === 'ARTICLE' ? resource.articleId : resource.pptId
   if (!resourceId) return
-  const key = `${currentPointId.value}:${resourceType}:${resourceId}`
+  const key = `${pointId}:${resourceType}:${resourceId}`
   if (completingResources.has(key)) return
   completingResources.add(key)
 
   try {
-    await completeLearnerResource(props.courseId, currentPointId.value, resourceType, resourceId)
+    await completeLearnerResource(props.courseId, pointId, resourceType, resourceId)
+    if (loadVersion !== studyLoadVersion.value || pointId !== currentPointId.value) return
     Object.assign(resource, { learningStatus:'COMPLETED', progressPercent:100, completed:true })
 
-    const refreshed = await getLearnerCourseStudy(props.courseId, currentPointId.value, type)
+    const refreshed = await getLearnerCourseStudy(props.courseId, pointId, type)
+    if (loadVersion !== studyLoadVersion.value || pointId !== currentPointId.value) return
     const currentId = resourceId
     studyData.value = refreshed
     activeType.value = type
@@ -260,6 +281,20 @@ function getMaxAllowedSecond(resource = activeResource.value) {
   )
 }
 
+function updateVideoProgressDisplay(resource = activeResource.value, currentSeconds = 0, durationSeconds = 0, ended = false) {
+  if (!resource || activeType.value !== 'VIDEO') return
+  const duration = Number(durationSeconds || resource.durationSeconds || 0)
+  if (!duration) return
+  const watched = ended ? duration : Math.min(Math.max(Number(currentSeconds || 0), Number(resource.maxPositionSeconds || 0), maxWatchedSecond.value), duration)
+  const progressPercent = ended ? 100 : Math.min(100, (watched * 100) / duration)
+  Object.assign(resource, {
+    progressPercent,
+    maxPositionSeconds: Math.floor(watched),
+    learningStatus: progressPercent >= 100 ? 'COMPLETED' : 'LEARNING',
+    completed: progressPercent >= 100,
+  })
+}
+
 function handleVideoLoadedMetadata() {
   restoreVideoPosition()
 }
@@ -290,6 +325,7 @@ function handleVideoTimeUpdate() {
     Number(activeResource.value.maxPositionSeconds || 0),
     current,
   )
+  updateVideoProgressDisplay(activeResource.value, current, videoRef.value.duration || activeResource.value.durationSeconds)
 }
 
 function handleVideoSeeking() {
@@ -340,30 +376,38 @@ async function saveCurrentVideoProgress(eventType, ended = false) {
   if (activeType.value !== 'VIDEO' || !videoRef.value || !activeResource.value) return
 
   const video = videoRef.value
-  const currentSeconds = Math.floor(video.currentTime || 0)
-  const durationSeconds = Math.floor(video.duration || activeResource.value.durationSeconds || 0)
+  const resource = activeResource.value
+  const pointId = currentPointId.value
+  const loadVersion = studyLoadVersion.value
+  const durationSeconds = Math.floor(video.duration || resource.durationSeconds || 0)
+  const currentSeconds = ended ? durationSeconds : Math.floor(video.currentTime || 0)
   if (!durationSeconds) return
   if (eventType === 'AUTO' && Math.abs(currentSeconds - lastSavedSecond.value) < 5) return
 
+  updateVideoProgressDisplay(resource, currentSeconds, durationSeconds, ended)
   lastSavedSecond.value = currentSeconds
   saving.value = true
 
   try {
     const result = await saveLearnerVideoProgress(
       props.courseId,
-      currentPointId.value,
-      activeResource.value.videoId,
+      pointId,
+      resource.videoId,
       { currentSeconds, durationSeconds, eventType, ended },
     )
 
-    Object.assign(activeResource.value, {
-      learningStatus: result.learningStatus,
-      progressPercent: result.progressPercent,
-      lastPositionSeconds: result.lastPositionSeconds,
-      maxPositionSeconds: result.maxPositionSeconds,
-      completed: result.completed,
-    })
-    maxWatchedSecond.value = Math.max(maxWatchedSecond.value, Number(result.maxPositionSeconds || currentSeconds))
+    if (loadVersion !== studyLoadVersion.value || pointId !== currentPointId.value) return
+
+    if (result) {
+      Object.assign(resource, {
+        learningStatus: result.learningStatus ?? resource.learningStatus,
+        progressPercent: result.progressPercent ?? resource.progressPercent,
+        lastPositionSeconds: result.lastPositionSeconds ?? currentSeconds,
+        maxPositionSeconds: result.maxPositionSeconds ?? resource.maxPositionSeconds,
+        completed: result.completed ?? resource.completed,
+      })
+    }
+    maxWatchedSecond.value = Math.max(maxWatchedSecond.value, Number(result?.maxPositionSeconds || currentSeconds))
   } catch (error) {
     errorMessage.value = error.message || '视频进度保存失败'
   } finally {
@@ -374,7 +418,7 @@ async function saveCurrentVideoProgress(eventType, ended = false) {
 function goPoint(pointId) {
   if (!pointId) return
   saveCurrentVideoProgress('LEAVE')
-  loadStudy(pointId, activeType.value)
+  loadStudy(pointId)
 }
 
 onMounted(() => loadStudy())
@@ -455,7 +499,11 @@ onBeforeUnmount(() => {
           </button>
         </div>
 
-        <div v-if="activeResource" class="resource-viewer">
+        <div
+          v-if="activeResource"
+          class="resource-viewer"
+          :key="`${currentPointId}-${activeType}-${activeResource.videoId || activeResource.articleId || activeResource.pptId || activeResourceIndex}`"
+        >
           <template v-if="activeType === 'VIDEO'">
             <div class="study-video-frame">
               <video

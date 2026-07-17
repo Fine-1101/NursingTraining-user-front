@@ -8,12 +8,27 @@ import {
   regenerateLearningReport,
   submitLearningReportFeedback,
 } from '../../api/learnerLearningReports'
+import {
+  forceRelogin,
+  getLearnerDepartments,
+  getLearnerProfile,
+  updateLearnerPassword,
+  updateLearnerProfile,
+} from '../../api/learnerProfile'
 
 const props = defineProps({ user: { type: Object, default: () => ({}) } })
 const emit = defineEmits(['profile-saved', 'open-courses'])
 
-const form = reactive({ realName: '', username: '', phone: '', departmentName: '', email: '' })
+const form = reactive({ realName: '', username: '', phone: '', deptId: '', departmentName: '' })
+const passwordForm = reactive({ newPassword: '', confirmPassword: '' })
 const saved = ref(false)
+const passwordSaved = ref(false)
+const profileLoading = ref(false)
+const profileSaving = ref(false)
+const passwordSaving = ref(false)
+const profileError = ref('')
+const passwordError = ref('')
+const departments = ref([])
 const report = ref(null)
 const eligibility = ref(null)
 const loading = ref(true)
@@ -89,17 +104,91 @@ function hydrateForm() {
     realName: props.user.realName || props.user.nickname || '',
     username: props.user.username || '',
     phone: props.user.phone || '',
+    deptId: props.user.deptId || props.user.departmentId || '',
     departmentName: props.user.departmentName || props.user.deptName || '',
-    email: props.user.email || '',
   })
 }
 
-function saveProfile() {
-  const next = { ...props.user, ...form, nickname: form.realName || props.user.nickname }
+function applyProfile(profile) {
+  if (!profile) return
+  Object.assign(form, {
+    realName: profile.realName || '',
+    username: profile.username || '',
+    phone: profile.phone || '',
+    deptId: profile.deptId || '',
+    departmentName: profile.departmentName || '',
+  })
+  const next = {
+    ...props.user,
+    id: profile.userId || props.user.id,
+    username: profile.username,
+    realName: profile.realName,
+    nickname: profile.realName || profile.username,
+    phone: profile.phone,
+    deptId: profile.deptId,
+    departmentName: profile.departmentName,
+    role: String(profile.roleType || props.user.role || 1),
+  }
   localStorage.setItem('userInfo', JSON.stringify(next))
-  saved.value = true
   emit('profile-saved', next)
-  window.setTimeout(() => { saved.value = false }, 2200)
+}
+
+async function loadProfile() {
+  profileLoading.value = true
+  profileError.value = ''
+  try {
+    const [profile, options] = await Promise.all([
+      getLearnerProfile(),
+      getLearnerDepartments(),
+    ])
+    departments.value = Array.isArray(options) ? options : []
+    applyProfile(profile)
+  } catch (error) {
+    profileError.value = error.message || '个人信息加载失败'
+  } finally {
+    profileLoading.value = false
+  }
+}
+
+async function saveProfile() {
+  profileSaving.value = true
+  profileError.value = ''
+  saved.value = false
+  try {
+    const profile = await updateLearnerProfile({
+      realName: form.realName,
+      phone: form.phone,
+      deptId: form.deptId ? Number(form.deptId) : null,
+    })
+    applyProfile(profile)
+    saved.value = true
+    window.setTimeout(() => { saved.value = false }, 2200)
+  } catch (error) {
+    profileError.value = error.message || '个人信息保存失败'
+  } finally {
+    profileSaving.value = false
+  }
+}
+
+async function changePassword() {
+  passwordSaving.value = true
+  passwordError.value = ''
+  passwordSaved.value = false
+  try {
+    await updateLearnerPassword({ ...passwordForm })
+    Object.assign(passwordForm, { newPassword: '', confirmPassword: '' })
+    passwordSaved.value = true
+    window.setTimeout(forceRelogin, 900)
+  } catch (error) {
+    passwordError.value = error.message || '密码修改失败'
+  } finally {
+    passwordSaving.value = false
+  }
+}
+
+function onDepartmentChange() {
+  const dept = departments.value.find(item => String(item.deptId) === String(form.deptId))
+  form.departmentName = dept?.departmentName || ''
 }
 
 function clearPolling() {
@@ -185,7 +274,7 @@ async function sendFeedback(helpful) {
   }
 }
 
-onMounted(() => { hydrateForm(); loadReport() })
+onMounted(() => { hydrateForm(); loadProfile(); loadReport() })
 onBeforeUnmount(clearPolling)
 </script>
 
@@ -198,13 +287,32 @@ onBeforeUnmount(clearPolling)
       </div>
       <div class="profile-divider"></div>
       <form class="profile-form" @submit.prevent="saveProfile">
-        <label><span>姓名</span><input v-model.trim="form.realName" placeholder="请输入姓名" /></label>
+        <label><span>姓名</span><input v-model.trim="form.realName" :disabled="profileLoading" placeholder="请输入姓名" required /></label>
         <label><span>账号</span><input v-model="form.username" disabled /></label>
-        <label><span>所属科室</span><input v-model.trim="form.departmentName" placeholder="请输入所属科室" /></label>
-        <label><span>手机号码</span><input v-model.trim="form.phone" inputmode="tel" placeholder="请输入手机号码" /></label>
-        <label><span>电子邮箱</span><input v-model.trim="form.email" type="email" placeholder="请输入电子邮箱" /></label>
+        <label>
+          <span>手机号</span>
+          <input v-model.trim="form.phone" :disabled="profileLoading" inputmode="tel" maxlength="11" placeholder="请输入手机号" />
+        </label>
+        <label>
+          <span>所属科室</span>
+          <select v-model="form.deptId" :disabled="profileLoading || !departments.length" required @change="onDepartmentChange">
+            <option value="" disabled>请选择科室</option>
+            <option v-for="dept in departments" :key="dept.deptId" :value="dept.deptId">{{ dept.departmentName }}</option>
+          </select>
+        </label>
+        <p v-if="profileError" class="profile-error">{{ profileError }}</p>
         <p class="profile-save-note" :class="{ visible: saved }">资料已保存</p>
-        <button class="profile-save-button" type="submit">保存修改</button>
+        <button class="profile-save-button" :disabled="profileLoading || profileSaving" type="submit">{{ profileSaving ? '保存中...' : '保存修改' }}</button>
+      </form>
+
+      <div class="profile-divider"></div>
+      <form class="profile-form password-reset-form" @submit.prevent="changePassword">
+        <div class="profile-section-title"><strong>重置密码</strong><span>输入新密码后即可重置，修改成功后需要重新登录</span></div>
+        <label><span>新密码</span><input v-model="passwordForm.newPassword" type="password" autocomplete="new-password" minlength="8" maxlength="20" placeholder="请输入8-20位新密码" required /></label>
+        <label><span>确认新密码</span><input v-model="passwordForm.confirmPassword" type="password" autocomplete="new-password" minlength="8" maxlength="20" placeholder="请再次输入新密码" required /></label>
+        <p v-if="passwordError" class="profile-error">{{ passwordError }}</p>
+        <p class="profile-save-note" :class="{ visible: passwordSaved }">密码已修改，即将返回登录页</p>
+        <button class="profile-save-button secondary" :disabled="passwordSaving" type="submit">{{ passwordSaving ? '修改中...' : '修改密码' }}</button>
       </form>
     </aside>
 

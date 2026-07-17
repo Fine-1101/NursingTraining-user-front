@@ -32,6 +32,10 @@ const topCoursePage = ref([])
 
 const periodText = computed(() => ranges.find((item) => item.value === activeRange.value)?.label || '今日')
 
+function topCourseValue(course) {
+  return Number(course.recordCount ?? course.count ?? course.learningCount ?? 0)
+}
+
 async function loadRecords() {
   loading.value = true
   errorMessage.value = ''
@@ -154,7 +158,7 @@ onMounted(loadRecords)
               <h3>{{ course.courseTitle }}</h3>
               <i :style="{ width: `${course.barPercent || 0}%` }"></i>
             </div>
-            <span>{{ course.totalDurationHours || 0 }}</span>
+            <span>{{ topCourseValue(course) }}</span>
           </article>
         </div>
         <p v-else class="empty-text">暂无课程排行</p>

@@ -3272,12 +3272,23 @@ a {
 .profile-form { display: grid; gap: 15px; }
 .profile-form label { display: grid; gap: 7px; }
 .profile-form label > span { color: #526159; font-size: 13px; font-weight: 800; }
-.profile-form input { width: 100%; height: 42px; border: 1px solid #dbe4de; border-radius: 8px; outline: 0; padding: 0 12px; color: #203025; transition: .2s ease; }
-.profile-form input:focus { border-color: #25a45a; box-shadow: 0 0 0 4px rgba(37, 164, 90, .09); }
-.profile-form input:disabled { background: #f5f7f5; color: #909992; cursor: not-allowed; }
+.profile-form input,
+.profile-form select { width: 100%; height: 42px; border: 1px solid #dbe4de; border-radius: 8px; outline: 0; padding: 0 12px; color: #203025; background: #fff; transition: .2s ease; }
+.profile-form input:focus,
+.profile-form select:focus { border-color: #25a45a; box-shadow: 0 0 0 4px rgba(37, 164, 90, .09); }
+.profile-form input:disabled,
+.profile-form select:disabled { background: #f5f7f5; color: #909992; cursor: not-allowed; }
+.profile-form select { cursor: pointer; }
+.profile-section-title { display: grid; gap: 5px; margin-bottom: 1px; }
+.profile-section-title strong { color: #203025; font-size: 15px; }
+.profile-section-title span { color: #89958d; font-size: 12px; line-height: 1.5; }
+.profile-error { margin: -2px 0; border-radius: 7px; background: #fff4f2; color: #b23b31; padding: 8px 10px; font-size: 12px; line-height: 1.5; }
 .profile-save-note { height: 16px; margin: -4px 0; color: #168f43; font-size: 12px; opacity: 0; transition: opacity .2s; }
 .profile-save-note.visible { opacity: 1; }
 .profile-save-button { height: 43px; border: 0; border-radius: 8px; background: #159947; color: #fff; cursor: pointer; font-weight: 800; box-shadow: 0 8px 18px rgba(21, 153, 71, .18); }
+.profile-save-button.secondary { border: 1px solid #bcdcc6; background: #fff; color: #159947; box-shadow: none; }
+.profile-save-button:disabled { opacity: .65; cursor: not-allowed; box-shadow: none; }
+.password-reset-form { gap: 13px; }
 
 .report-column { display: grid; min-width: 0; gap: 16px; }
 .report-heading {
